@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { jsonToCSV, generateFilename } from '../utils/csvExporter.js';
 
 // Helper function to extract video ID from URL
 function extractVideoId(url) {
@@ -16,7 +17,7 @@ function extractChannelId(url) {
 }
 
 export const getVideoInfo = async (req, res) => {
-  const { url } = req.body;
+  const { url, format = 'json' } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'No URL provided', body: req.body });
   }
@@ -37,7 +38,7 @@ export const getVideoInfo = async (req, res) => {
     }
     const video = items[0];
     const { snippet, statistics, contentDetails } = video;
-    res.json({
+    const responseData = {
       videoId,
       title: snippet.title,
       channelTitle: snippet.channelTitle,
@@ -47,7 +48,16 @@ export const getVideoInfo = async (req, res) => {
       description: snippet.description,
       tags: snippet.tags || [],
       duration: contentDetails.duration
-    });
+    };
+
+    if (format === 'csv') {
+      const csvData = jsonToCSV(responseData, 'video-info');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${generateFilename('video-info', snippet.title)}"`);
+      res.send(csvData);
+    } else {
+      res.json(responseData);
+    }
   } catch (error) {
     console.error('YouTube API Error:', error.response?.data || error.message);
     if (error.response?.status === 400) {
@@ -61,7 +71,7 @@ export const getVideoInfo = async (req, res) => {
 };
 
 export const getChannelAnalysis = async (req, res) => {
-  const { url } = req.body;
+  const { url, format = 'json' } = req.body;
   if (!url) {
     return res.status(400).json({ error: 'No URL provided', body: req.body });
   }
@@ -186,7 +196,7 @@ export const getChannelAnalysis = async (req, res) => {
   // Outlier videos (views > 5x avg)
   const outlierVideos = videoData.filter(v => v.views > 5 * avgViews);
 
-  res.json({
+  const responseData = {
     channelId,
     channelTitle: channelInfo.snippet.title,
     totalSubscribers,
@@ -197,7 +207,16 @@ export const getChannelAnalysis = async (req, res) => {
     topTags: sortedTags.slice(0, 10),
     topVideos,
     outlierVideos
-  });
+  };
+
+  if (format === 'csv') {
+    const csvData = jsonToCSV(responseData, 'channel-analysis');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${generateFilename('channel-analysis', channelInfo.snippet.title)}"`);
+    res.send(csvData);
+  } else {
+    res.json(responseData);
+  }
 };
 
 export const searchVideos = async (req, res) => {
@@ -209,7 +228,8 @@ export const searchVideos = async (req, res) => {
     videoType = 'any', // any, movie, episode, short
     channelSubscriberRange,
     viewToSubRatio,
-    maxResults = 50
+    maxResults = 50,
+    format = 'json'
   } = req.body;
 
   if (!query) {
@@ -309,11 +329,20 @@ export const searchVideos = async (req, res) => {
       thumbnail: video.snippet.thumbnails?.high?.url
     }));
 
-    res.json({
+    const responseData = {
       videos: formattedVideos,
       totalResults: searchResponse.data.pageInfo.totalResults,
       resultsPerPage: searchResponse.data.pageInfo.resultsPerPage
-    });
+    };
+
+    if (format === 'csv') {
+      const csvData = jsonToCSV(responseData, 'search-results');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${generateFilename('search-results', query)}"`);
+      res.send(csvData);
+    } else {
+      res.json(responseData);
+    }
 
   } catch (error) {
     console.error('Search API Error:', error.response?.data || error.message);
